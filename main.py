@@ -11,16 +11,19 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 def send_telegram(message: str):
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        print("❌ Error: Missing Telegram Config")
         return False
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown", "disable_web_page_preview": False}
     try:
         resp = requests.post(url, json=payload, timeout=10)
         return resp.ok
-    except:
+    except Exception as e:
+        print(f"❌ Telegram Fail: {e}")
         return False
 
 def build_card(d):
+    # FALLBACKS: "BTCUSDT" and "60" are just defaults if the data is missing
     ticker  = d.get("ticker", "BTCUSDT")
     side    = str(d.get("side", "SIGNAL")).upper()
     tf      = d.get("tf", "60")
@@ -30,19 +33,19 @@ def build_card(d):
         sl_dist = float(d.get("sl_dist", 0))
         tp_dist = float(d.get("tp_dist", 0))
         risk    = float(d.get("risk_usd", 25.00))
-        # This captures the 'lots' from the JSON above
         lots    = d.get("lots", "0.00")
     except:
         entry = sl_dist = tp_dist = risk = 0
         lots  = "0.00"
 
+    # Calc Directional Prices
     if "BUY" in side or "LONG" in side:
-        sl_price, tp_price, emoji, action = entry - sl_dist, entry + tp_dist, "🟢", "LONG"
+        sl_p, tp_p, emoji, action = entry - sl_dist, entry + tp_dist, "🟢", "LONG"
     else:
-        sl_price, tp_price, emoji, action = entry + sl_dist, entry - tp_dist, "🔴", "SHORT"
+        sl_p, tp_p, emoji, action = entry + sl_dist, entry - tp_dist, "🔴", "SHORT"
 
-    # Decimal precision: 2 for BTC/high price, 4+ for others
-    prec = 2 if entry > 100 else 4
+    # Precision for crypto vs stocks/forex
+    prec = 2 if entry > 100 else (4 if entry > 1 else 6)
     rr = round(tp_dist / sl_dist, 2) if sl_dist > 0 else 0
 
     return (
@@ -50,8 +53,8 @@ def build_card(d):
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"📦 *Lots to Enter:* `{lots}`\n"
         f"📈 *Entry:* `{entry:.{prec}f}`\n"
-        f"🛡️ *Stop:* `{sl_price:.{prec}f}`\n"
-        f"🎯 *Target:* `{tp_price:.{prec}f}`\n"
+        f"🛡️ *Stop:* `{sl_p:.{prec}f}`\n"
+        f"🎯 *Target:* `{tp_p:.{prec}f}`\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"💰 *Risk:* `${risk:.2f}` | ⚖️ *R:R:* `1:{rr}`\n"
         f"⏱️ *TF:* `{tf}m`\n"
@@ -59,28 +62,22 @@ def build_card(d):
         f"🔗 [Open Chart in TradingView](https://www.tradingview.com/chart/?symbol={ticker}&interval={tf})\n"
         f"⚡ _Manual execution required_"
     )
-    
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    # This is the 'Master Key': it reads the raw data regardless of the 415 error
-    raw_data = request.get_data(as_text=True)
-    
-    try:
-        data = json.loads(raw_data)
-    except Exception as e:
-        print(f"Manual Parse Failed: {e}")
-        # Try one last ditch effort if it's form-encoded
-        data = request.form.to_dict()
-    
+    # Force JSON parsing even if content-type is wrong
+    data = request.get_json(force=True, silent=True)
     if not data:
-        return jsonify({"error": "Empty body"}), 400
+        try:
+            data = json.loads(request.data.decode('utf-8'))
+        except:
+            return jsonify({"error": "Format Error"}), 400
 
-    print(f"Accepted Signal for: {data.get('ticker')}")
+    print(f"✅ Received signal for {data.get('ticker')}")
     card = build_card(data)
     send_telegram(card)
-    return jsonify({"status": "received"}), 200
+    return jsonify({"status": "delivered"}), 200
 
-# This catches the 415 before Flask can show it to TradingView
 @app.errorhandler(415)
 def handle_415(e):
     return webhook()
