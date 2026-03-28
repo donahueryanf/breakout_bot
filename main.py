@@ -106,24 +106,26 @@ def build_signal_card(d: dict) -> str:
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    # Optional: verify secret header
-    if WEBHOOK_SECRET:
-        received = request.headers.get("X-Webhook-Secret", "")
-        if received != WEBHOOK_SECRET:
-            return jsonify({"error": "unauthorized"}), 401
+    data = request.json
+    if not data:
+        return jsonify({"error": "No JSON received"}), 400
+    
+    # Check for secret inside the JSON message instead of headers
+    received_secret = data.get("secret", "")
+    if received_secret != WEBHOOK_SECRET:
+        print(f"Unauthorized access attempt with secret: {received_secret}")
+        return jsonify({"error": "unauthorized"}), 401
 
-    raw = request.get_data(as_text=True)
-    print(f"Received: {raw}")
+    print(f"Received valid signal for: {data.get('ticker')}")
 
+    # Build and send the card
     try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        return jsonify({"error": "invalid JSON"}), 400
-
-    card = build_signal_card(data)
-    ok   = send_telegram(card)
-
-    return jsonify({"ok": ok, "card": card}), 200 if ok else 500
+        card = build_signal_card(data)
+        ok = send_telegram(card)
+        return jsonify({"ok": ok}), 200 if ok else 500
+    except Exception as e:
+        print(f"Error processing signal: {e}")
+        return jsonify({"error": str(e)}), 400
 
 
 @app.route("/health", methods=["GET"])
