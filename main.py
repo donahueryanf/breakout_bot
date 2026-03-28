@@ -22,18 +22,21 @@ def send_telegram(message: str):
 
 def build_card(d):
     ticker  = d.get("ticker", "BTCUSDT")
-    side    = d.get("side", "SIGNAL").upper()
-    tf      = d.get("tf", "60")  # Default to 60m if missing
+    side    = str(d.get("side", "SIGNAL")).upper()
+    tf      = d.get("tf", "60")
     
     try:
         entry   = float(d.get("entry", 0))
         sl_dist = float(d.get("sl_dist", 0))
         tp_dist = float(d.get("tp_dist", 0))
         risk    = float(d.get("risk_usd", 0))
+        # GET THE LOTS: This is the critical missing piece
+        lots    = d.get("lots", "0.00") 
     except:
         entry = sl_dist = tp_dist = risk = 0
+        lots  = "0.00"
 
-    # Calculate Levels
+    # Direction Logic
     if "BUY" in side or "LONG" in side:
         sl_price, tp_price, emoji, action = entry - sl_dist, entry + tp_dist, "🟢", "LONG"
     else:
@@ -42,14 +45,10 @@ def build_card(d):
     prec = 2 if entry > 100 else 4
     rr = round(tp_dist / sl_dist, 2) if sl_dist > 0 else 0
 
-    # TradingView Deep Link
-    # Logic: https://www.tradingview.com/chart/?symbol=EXCHANGE:TICKER&interval=TF
-    # Note: Interval must be in minutes (e.g., 60, 240, 1D)
-    tv_url = f"https://www.tradingview.com/chart/?symbol={ticker}&interval={tf}"
-
     return (
         f"{emoji} *{action} SIGNAL: {ticker}*\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"📦 *Lots:* `{lots}`\n"
         f"📈 *Entry:* `{entry:.{prec}f}`\n"
         f"🛡️ *Stop:* `{sl_price:.{prec}f}`\n"
         f"🎯 *Target:* `{tp_price:.{prec}f}`\n"
@@ -57,8 +56,8 @@ def build_card(d):
         f"💰 *Risk:* `${risk:.2f}` | ⚖️ *R:R:* `1:{rr}`\n"
         f"⏱️ *TF:* `{tf}m`\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"🔗 [Open Chart in TradingView]({tv_url})\n"
-        f"⚡ _Tap link to verify breakout_"
+        f"🔗 [Open Chart in TradingView](https://www.tradingview.com/chart/?symbol={ticker}&interval={tf})\n"
+        f"⚡ _Copy lot size to terminal_"
     )
     
 @app.route("/webhook", methods=["POST"])
