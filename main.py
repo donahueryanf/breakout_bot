@@ -9,8 +9,6 @@ Deploy free on Railway: https://railway.app
 
 import os
 import json
-import hmac
-import hashlib
 import requests
 from flask import Flask, request, jsonify
 
@@ -19,7 +17,7 @@ app = Flask(__name__)
 # ── Config (set these as environment variables on Railway) ──
 TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
-WEBHOOK_SECRET   = os.environ.get("WEBHOOK_SECRET", "")   # optional security key
+WEBHOOK_SECRET   = os.environ.get("WEBHOOK_SECRET", "")
 
 
 def send_telegram(message: str):
@@ -52,7 +50,6 @@ def build_signal_card(d: dict) -> str:
     adx     = float(d.get("adx", 0))
     knn     = int(float(d.get("knn", 0)))
 
-    # Calculate absolute SL and TP prices
     if side == "LONG":
         sl_price = entry - sl_dist
         tp_price = entry + tp_dist
@@ -78,10 +75,8 @@ def build_signal_card(d: dict) -> str:
     else:
         return f"Unknown signal: {d}"
 
-    # Round entry/SL/TP sensibly based on price magnitude
     decimals = 2 if entry > 100 else (4 if entry > 1 else 6)
     fmt = f"{{:.{decimals}f}}"
-
     rr = round(tp_dist / sl_dist, 2) if sl_dist > 0 else 0
 
     card = (
@@ -109,22 +104,21 @@ def webhook():
     data = request.json
     if not data:
         return jsonify({"error": "No JSON received"}), 400
-    
-    # Check for secret inside the JSON message instead of headers
+
+    # Verification: Check for secret inside the JSON message
     received_secret = data.get("secret", "")
-    if received_secret != WEBHOOK_SECRET:
-        print(f"Unauthorized access attempt with secret: {received_secret}")
+    if WEBHOOK_SECRET and received_secret != WEBHOOK_SECRET:
+        print(f"AUTH FAILED: Received '{received_secret}', Expected '{WEBHOOK_SECRET}'")
         return jsonify({"error": "unauthorized"}), 401
 
-    print(f"Received valid signal for: {data.get('ticker')}")
+    print(f"AUTH SUCCESS: Valid signal for {data.get('ticker')}")
 
-    # Build and send the card
     try:
         card = build_signal_card(data)
         ok = send_telegram(card)
         return jsonify({"ok": ok}), 200 if ok else 500
     except Exception as e:
-        print(f"Error processing signal: {e}")
+        print(f"PROCESSING ERROR: {e}")
         return jsonify({"error": str(e)}), 400
 
 
