@@ -21,11 +21,44 @@ def send_telegram(message: str):
         return False
 
 def build_card(d):
-    # Simplified card builder to ensure it never crashes
-    ticker = d.get("ticker", "UNKNOWN")
-    side = d.get("side", "SIGNAL")
-    entry = d.get("entry", 0)
-    return f"🚀 *{side}* on `{ticker}`\nPrice: `{entry}`\n_Sent from Railway_"
+    ticker  = d.get("ticker", "UNKNOWN")
+    side    = d.get("side", "SIGNAL").upper()
+    tf      = d.get("tf", "??")
+    
+    # Convert string-numbers to actual numbers safely
+    try:
+        entry   = float(d.get("entry", 0))
+        sl_dist = float(d.get("sl_dist", 0))
+        tp_dist = float(d.get("tp_dist", 0))
+        risk    = float(d.get("risk_usd", 0))
+    except:
+        entry = sl_dist = tp_dist = risk = 0
+
+    # Calculate levels based on direction
+    if "BUY" in side or "LONG" in side:
+        sl_price, tp_price, emoji = entry - sl_dist, entry + tp_dist, "🟢"
+        action = "LONG"
+    else:
+        sl_price, tp_price, emoji = entry + sl_dist, entry - tp_dist, "🔴"
+        action = "SHORT"
+
+    # Formatting decimals based on price (BTC vs SOL vs PEPE)
+    prec = 2 if entry > 100 else 4
+    rr = round(tp_dist / sl_dist, 2) if sl_dist > 0 else 0
+
+    return (
+        f"{emoji} *{action} SIGNAL: {ticker}*\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"📈 *Entry:* `{entry:.{prec}f}`\n"
+        f"🛡️ *Stop:* `{sl_price:.{prec}f}`\n"
+        f"🎯 *Target:* `{tp_price:.{prec}f}`\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"💰 *Risk:* `${risk:.2f}`\n"
+        f"⚖️ *R:R:* `1:{rr}`\n"
+        f"⏱️ *TF:* `{tf}m`\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"⚡ _Check Breakout Terminal_"
+    )
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
