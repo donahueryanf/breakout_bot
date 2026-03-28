@@ -1,11 +1,11 @@
 """
-Breakout Signal Bot (Open Version)
-----------------------------------
-Receives TradingView webhook alerts and sends them to Telegram.
-Security check disabled for maximum compatibility.
+Breakout Signal Bot (V3 - Format Independent)
+--------------------------------------------
+Accepts signals regardless of Media-Type to fix 415 errors.
 """
 
 import os
+import json
 import requests
 from flask import Flask, request, jsonify
 
@@ -38,13 +38,18 @@ def build_signal_card(d: dict) -> str:
     side    = d.get("side", "")
     ticker  = d.get("ticker", "???")
     tf      = d.get("tf", "?")
-    entry   = float(d.get("entry", 0))
-    sl_dist = float(d.get("sl_dist", 0))
-    tp_dist = float(d.get("tp_dist", 0))
-    lots    = float(d.get("lots", 0))
-    risk    = float(d.get("risk_usd", 0))
-    adx     = float(d.get("adx", 0))
-    knn     = int(float(d.get("knn", 0)))
+    
+    # Use 0 as default if keys are missing or non-numeric
+    try:
+        entry   = float(d.get("entry", 0))
+        sl_dist = float(d.get("sl_dist", 0))
+        tp_dist = float(d.get("tp_dist", 0))
+        lots    = float(d.get("lots", 0))
+        risk    = float(d.get("risk_usd", 0))
+        adx     = float(d.get("adx", 0))
+        knn     = int(float(d.get("knn", 0)))
+    except (ValueError, TypeError):
+        entry = sl_dist = tp_dist = lots = risk = adx = knn = 0
 
     if side == "LONG":
         sl_price = entry - sl_dist
@@ -97,19 +102,29 @@ def build_signal_card(d: dict) -> str:
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    data = request.json
-    if not data:
-        return jsonify({"error": "No JSON received"}), 400
+    # Force parsing regardless of what TradingView claims the 'content-type' is
+    try:
+        # 1. Try standard JSON
+        # 2. Try raw data as string -> JSON
+        # 3. Try form data
+        data = request.get_json(silent=True) or \
+               json.loads(request.data.decode('utf-8') or '{}') or \
+               request.form.to_dict()
+    except Exception as e:
+        print(f"JSON Parse Error: {e}")
+        return jsonify({"error": "Invalid format"}), 400
 
-    # Verification removed for compatibility
-    print(f"AUTH BYPASSED: Processing signal for {data.get('ticker')}")
+    if not data:
+        return jsonify({"error": "No data received"}), 400
+
+    print(f"WEBHOOK: Received signal for {data.get('ticker')}")
 
     try:
         card = build_signal_card(data)
         ok = send_telegram(card)
         return jsonify({"ok": ok}), 200 if ok else 500
     except Exception as e:
-        print(f"PROCESSING ERROR: {e}")
+        print(f"LOGIC ERROR: {e}")
         return jsonify({"error": str(e)}), 400
 
 
