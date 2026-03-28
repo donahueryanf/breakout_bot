@@ -21,11 +21,10 @@ def send_telegram(message: str):
         return False
 
 def build_card(d):
-    ticker  = d.get("ticker", "UNKNOWN")
+    ticker  = d.get("ticker", "BTCUSDT")
     side    = d.get("side", "SIGNAL").upper()
-    tf      = d.get("tf", "??")
+    tf      = d.get("tf", "60")  # Default to 60m if missing
     
-    # Convert string-numbers to actual numbers safely
     try:
         entry   = float(d.get("entry", 0))
         sl_dist = float(d.get("sl_dist", 0))
@@ -34,17 +33,19 @@ def build_card(d):
     except:
         entry = sl_dist = tp_dist = risk = 0
 
-    # Calculate levels based on direction
+    # Calculate Levels
     if "BUY" in side or "LONG" in side:
-        sl_price, tp_price, emoji = entry - sl_dist, entry + tp_dist, "🟢"
-        action = "LONG"
+        sl_price, tp_price, emoji, action = entry - sl_dist, entry + tp_dist, "🟢", "LONG"
     else:
-        sl_price, tp_price, emoji = entry + sl_dist, entry - tp_dist, "🔴"
-        action = "SHORT"
+        sl_price, tp_price, emoji, action = entry + sl_dist, entry - tp_dist, "🔴", "SHORT"
 
-    # Formatting decimals based on price (BTC vs SOL vs PEPE)
     prec = 2 if entry > 100 else 4
     rr = round(tp_dist / sl_dist, 2) if sl_dist > 0 else 0
+
+    # TradingView Deep Link
+    # Logic: https://www.tradingview.com/chart/?symbol=EXCHANGE:TICKER&interval=TF
+    # Note: Interval must be in minutes (e.g., 60, 240, 1D)
+    tv_url = f"https://www.tradingview.com/chart/?symbol={ticker}&interval={tf}"
 
     return (
         f"{emoji} *{action} SIGNAL: {ticker}*\n"
@@ -53,13 +54,13 @@ def build_card(d):
         f"🛡️ *Stop:* `{sl_price:.{prec}f}`\n"
         f"🎯 *Target:* `{tp_price:.{prec}f}`\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"💰 *Risk:* `${risk:.2f}`\n"
-        f"⚖️ *R:R:* `1:{rr}`\n"
+        f"💰 *Risk:* `${risk:.2f}` | ⚖️ *R:R:* `1:{rr}`\n"
         f"⏱️ *TF:* `{tf}m`\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"⚡ _Check Breakout Terminal_"
+        f"🔗 [Open Chart in TradingView]({tv_url})\n"
+        f"⚡ _Tap link to verify breakout_"
     )
-
+    
 @app.route("/webhook", methods=["POST"])
 def webhook():
     # This is the 'Master Key': it reads the raw data regardless of the 415 error
