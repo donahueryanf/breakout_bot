@@ -1,14 +1,11 @@
 """
-Breakout Signal Bot
--------------------
-Receives TradingView webhook alerts from the KNN Pine Script,
-formats a full signal card, and sends it to Telegram.
-
-Deploy free on Railway: https://railway.app
+Breakout Signal Bot (Open Version)
+----------------------------------
+Receives TradingView webhook alerts and sends them to Telegram.
+Security check disabled for maximum compatibility.
 """
 
 import os
-import json
 import requests
 from flask import Flask, request, jsonify
 
@@ -17,7 +14,6 @@ app = Flask(__name__)
 # ── Config (set these as environment variables on Railway) ──
 TELEGRAM_TOKEN   = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
-WEBHOOK_SECRET   = os.environ.get("WEBHOOK_SECRET", "")
 
 
 def send_telegram(message: str):
@@ -105,13 +101,8 @@ def webhook():
     if not data:
         return jsonify({"error": "No JSON received"}), 400
 
-    # Verification: Check for secret inside the JSON message
-    received_secret = data.get("secret", "")
-    if WEBHOOK_SECRET and received_secret != WEBHOOK_SECRET:
-        print(f"AUTH FAILED: Received '{received_secret}', Expected '{WEBHOOK_SECRET}'")
-        return jsonify({"error": "unauthorized"}), 401
-
-    print(f"AUTH SUCCESS: Valid signal for {data.get('ticker')}")
+    # Verification removed for compatibility
+    print(f"AUTH BYPASSED: Processing signal for {data.get('ticker')}")
 
     try:
         card = build_signal_card(data)
