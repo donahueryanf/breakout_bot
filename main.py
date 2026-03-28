@@ -29,26 +29,26 @@ def build_card(d):
         entry   = float(d.get("entry", 0))
         sl_dist = float(d.get("sl_dist", 0))
         tp_dist = float(d.get("tp_dist", 0))
-        risk    = float(d.get("risk_usd", 0))
-        # GET THE LOTS: This is the critical missing piece
-        lots    = d.get("lots", "0.00") 
+        risk    = float(d.get("risk_usd", 25.00))
+        # This captures the 'lots' from the JSON above
+        lots    = d.get("lots", "0.00")
     except:
         entry = sl_dist = tp_dist = risk = 0
         lots  = "0.00"
 
-    # Direction Logic
     if "BUY" in side or "LONG" in side:
         sl_price, tp_price, emoji, action = entry - sl_dist, entry + tp_dist, "🟢", "LONG"
     else:
         sl_price, tp_price, emoji, action = entry + sl_dist, entry - tp_dist, "🔴", "SHORT"
 
+    # Decimal precision: 2 for BTC/high price, 4+ for others
     prec = 2 if entry > 100 else 4
     rr = round(tp_dist / sl_dist, 2) if sl_dist > 0 else 0
 
     return (
         f"{emoji} *{action} SIGNAL: {ticker}*\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"📦 *Lots:* `{lots}`\n"
+        f"📦 *Lots to Enter:* `{lots}`\n"
         f"📈 *Entry:* `{entry:.{prec}f}`\n"
         f"🛡️ *Stop:* `{sl_price:.{prec}f}`\n"
         f"🎯 *Target:* `{tp_price:.{prec}f}`\n"
@@ -57,7 +57,7 @@ def build_card(d):
         f"⏱️ *TF:* `{tf}m`\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"🔗 [Open Chart in TradingView](https://www.tradingview.com/chart/?symbol={ticker}&interval={tf})\n"
-        f"⚡ _Copy lot size to terminal_"
+        f"⚡ _Manual execution required_"
     )
     
 @app.route("/webhook", methods=["POST"])
