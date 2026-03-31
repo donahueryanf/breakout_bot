@@ -22,6 +22,26 @@ def send_telegram(message: str):
         print(f"❌ Telegram Fail: {e}")
         return False
 
+def build_trail_card(d):
+    ticker      = d.get("ticker", "BTCUSDT")
+    side        = str(d.get("side", "")).upper()
+    tf          = d.get("tf", "60")
+    close_price = d.get("entry", "?")       # Pine sends current close as "entry"
+    trail_level = d.get("trail_level", "?")
+    direction   = "LONG" if "LONG" in side else "SHORT"
+    emoji       = "🟢" if direction == "LONG" else "🔴"
+    return (
+        f"🚨 *TRAIL STOP HIT — CLOSE {direction} {emoji}*\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"📌 *Symbol:* `{ticker}`\n"
+        f"💵 *Price Now:* `{close_price}`\n"
+        f"🔒 *Trail Level:* `{trail_level}`\n"
+        f"⏱️ *TF:* `{tf}m`\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🔗 [Open Chart](https://www.tradingview.com/chart/?symbol={ticker}&interval={tf})\n"
+        f"⚡ _Close your {direction} position manually now_"
+    )
+
 def build_card(d):
     # FALLBACKS: "BTCUSDT" and "60" are just defaults if the data is missing
     ticker  = d.get("ticker", "BTCUSDT")
@@ -73,8 +93,15 @@ def webhook():
         except:
             return jsonify({"error": "Format Error"}), 400
 
-    print(f"✅ Received signal for {data.get('ticker')}")
-    card = build_card(data)
+    side = str(data.get("side", "")).lower()
+    print(f"✅ Received signal for {data.get('ticker')} | side={side}")
+
+    # Route trail exit signals to their own card
+    if "trail" in side:
+        card = build_trail_card(data)
+    else:
+        card = build_card(data)
+
     send_telegram(card)
     return jsonify({"status": "delivered"}), 200
 
